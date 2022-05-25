@@ -2,6 +2,7 @@ const Contributor = require("../../models/contributor");
 const Month = require("../../models/month");
 const { isValid } = require("../services/validAmountService")();
 const { ObjectId } = require("mongoose").Types;
+const moment = require("moment");
 
 module.exports = function (router) {
   router.use("/contributors", (req, res, next) => {
@@ -23,7 +24,7 @@ module.exports = function (router) {
           req.lastMonthId = month[0]._id;
           return next();
         }
-        const defaultMonth = new Date();
+        const defaultMonth = moment.utc().date(1).toDate();
         return res.json(defaultMonth);
       }
     );
@@ -32,6 +33,11 @@ module.exports = function (router) {
   router.route("/contributors").get((req, res) => {
     Contributor.aggregate(
       [
+        {
+          $sort: {
+            rank: 1,
+          },
+        },
         {
           $unwind: {
             path: "$salaries",
@@ -43,8 +49,12 @@ module.exports = function (router) {
             name: 1,
             salaryId: "$salaries._id",
             amount: "$salaries.amount",
-            startDate: "$salaries.startDate",
-            endDate: "$salaries.endDate",
+            startDate: {
+              $dateToString: { date: "$salaries.startDate", format: "%Y-%m" },
+            },
+            endDate: {
+              $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
+            },
             canEditAmount: {
               $gt: ["$startDate", req.lastMonthId],
             },
@@ -122,14 +132,14 @@ module.exports = function (router) {
       res.status(400);
       return res.send("Le format de date est YYYY-MM");
     } else {
-      req.body.startDate = new Date(`${req.body.startDate}-01`);
+      req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
     }
 
     if (req.body.endDate && !req.body.startDate.match(regexFormat)) {
       res.status(400);
       return res.send("Le format de date est YYYY-MM");
     } else if (req.body.endDate) {
-      req.body.startDate = new Date(`${req.body.endDate}-01`);
+      req.body.startDate = moment.utc(`${req.body.endDate}-01`).toDate();
     }
 
     Contributor.findById(
@@ -183,8 +193,12 @@ module.exports = function (router) {
             name: 1,
             amount: "$salaries.amount",
             salaryId: "$salaries._id",
-            startDate: "$salaries.startDate",
-            endDate: "$salaries.endDate",
+            startDate: {
+              $dateToString: { date: "$salaries.startDate", format: "%Y-%m" },
+            },
+            endDate: {
+              $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
+            },
             canEditAmount: {
               $gt: ["$startDate", req.lastMonthId],
             },
@@ -281,8 +295,12 @@ module.exports = function (router) {
               name: 1,
               amount: "$salaries.amount",
               salaryId: "$salaries._id",
-              startDate: "$salaries.startDate",
-              endDate: "$salaries.endDate",
+              startDate: {
+                $dateToString: { date: "$salaries.startDate", format: "%Y-%m" },
+              },
+              endDate: {
+                $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
+              },
               canEditAmount: {
                 $gt: ["$startDate", req.lastMonthId],
               },
@@ -370,8 +388,12 @@ module.exports = function (router) {
             name: 1,
             salaryId: "$salaries._id",
             amount: "$salaries.amount",
-            startDate: "$salaries.startDate",
-            endDate: "$salaries.endDate",
+            startDate: {
+              $dateToString: { date: "$salaries.startDate", format: "%Y-%m" },
+            },
+            endDate: {
+              $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
+            },
             canEditAmount: {
               $gt: ["$startDate", req.lastMonthId],
             },

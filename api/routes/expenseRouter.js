@@ -4,6 +4,7 @@ const Category = require("../../models/category");
 const DistributionType = require("../../models/distributionType");
 const { isValid } = require("../services/validAmountService")();
 const { ObjectId } = require("mongoose").Types;
+const moment = require("moment");
 
 module.exports = function (router) {
   router.use("/expenses", (req, res, next) => {
@@ -22,10 +23,11 @@ module.exports = function (router) {
         if (err) {
           return res.send(err);
         } else if (month) {
-          req.lastMonthId = month.id;
+          req.lastMonthId = month[0]._id;
+          console.log(req.lastMonthId);
           return next();
         }
-        const defaultMonth = new Date();
+        const defaultMonth = moment.utc().date(1).toDate();
         return res.json(defaultMonth);
       }
     );
@@ -33,9 +35,10 @@ module.exports = function (router) {
 
   router.use("/expenses", (req, res, next) => {
     if (
-      req.body &&
-      Object.keys(req.body).length === 0 &&
-      Object.getPrototypeOf(req.body) === Object.prototype
+      req.url.match(new RegExp("^.*\\/amounts.*$")) ||
+      (req.body &&
+        Object.keys(req.body).length === 0 &&
+        Object.getPrototypeOf(req.body) === Object.prototype)
     ) {
       return next();
     }
@@ -93,31 +96,6 @@ module.exports = function (router) {
     );
   });
 
-  router.use("/expenses", (req, res, next) => {
-    Month.aggregate(
-      [
-        {
-          $sort: {
-            _id: -1,
-          },
-        },
-        {
-          $limit: 1,
-        },
-      ],
-      (err, month) => {
-        if (err) {
-          return res.send(err);
-        } else if (month) {
-          req.lastMonthId = month.id;
-          return next();
-        }
-        const defaultMonth = new Date();
-        return res.json(defaultMonth);
-      }
-    );
-  });
-
   router
     .route("/expenses")
     .get((req, res) => {
@@ -129,8 +107,13 @@ module.exports = function (router) {
             },
           },
           {
+            $sort: {
+              "amounts.startDate": -1,
+            },
+          },
+          {
             $lookup: {
-              from: "expenses",
+              from: "categories",
               localField: "categoryId",
               foreignField: "_id",
               as: "category",
@@ -167,8 +150,12 @@ module.exports = function (router) {
               },
               amountId: "$amounts._id",
               amount: "$amounts.amount",
-              startDate: "$amounts.startDate",
-              endDate: "$amounts.endDate",
+              startDate: {
+                $dateToString: { date: "$amounts.startDate", format: "%Y-%m" },
+              },
+              endDate: {
+                $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
+              },
               canEditAmount: {
                 $gt: ["$startDate", req.lastMonthId],
               },
@@ -262,14 +249,14 @@ module.exports = function (router) {
       res.status(400);
       return res.send("Le format de date est YYYY-MM");
     } else {
-      req.body.startDate = new Date(`${req.body.startDate}-01`);
+      req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
     }
 
-    if (req.body.endDate && !req.body.startDate.match(regexFormat)) {
+    if (req.body.endDate && !req.body.endDate.match(regexFormat)) {
       res.status(400);
       return res.send("Le format de date est YYYY-MM");
     } else if (req.body.endDate) {
-      req.body.startDate = new Date(`${req.body.endDate}-01`);
+      req.body.endDate = moment.utc(`${req.body.endDate}-01`).toDate();
     }
 
     Expense.findById(ObjectId(req.params.expenseId), (err, expense) => {
@@ -315,13 +302,22 @@ module.exports = function (router) {
           },
         },
         {
+          $sort: {
+            "amounts.startDate": -1,
+          },
+        },
+        {
           $project: {
             amountId: {
               $toObjectId: "$amounts._id",
             },
             amount: "$amounts.amount",
-            startDate: "$amounts.startDate",
-            endDate: "$amounts.endDate",
+            startDate: {
+              $dateToString: { date: "$amounts.startDate", format: "%Y-%m" },
+            },
+            endDate: {
+              $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
+            },
             canEditAmount: {
               $gt: ["$startDate", req.lastMonthId],
             },
@@ -388,6 +384,11 @@ module.exports = function (router) {
             },
           },
           {
+            $sort: {
+              "amounts.startDate": -1,
+            },
+          },
+          {
             $match: {
               "amounts._id": new ObjectId(req.params.amountId),
             },
@@ -399,8 +400,12 @@ module.exports = function (router) {
                 $toObjectId: "$amounts._id",
               },
               amount: "$amounts.amount",
-              startDate: "$amounts.startDate",
-              endDate: "$amounts.endDate",
+              startDate: {
+                $dateToString: { date: "$amounts.startDate", format: "%Y-%m" },
+              },
+              endDate: {
+                $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
+              },
               canEditAmount: {
                 $gt: ["$startDate", req.lastMonthId],
               },
@@ -485,7 +490,7 @@ module.exports = function (router) {
         },
         {
           $lookup: {
-            from: "expenses",
+            from: "categories",
             localField: "categoryId",
             foreignField: "_id",
             as: "category",
@@ -515,6 +520,11 @@ module.exports = function (router) {
           },
         },
         {
+          $sort: {
+            "amounts.startDate": -1,
+          },
+        },
+        {
           $project: {
             name: 1,
             categoryId: 1,
@@ -529,8 +539,12 @@ module.exports = function (router) {
               $toObjectId: "$amounts._id",
             },
             amount: "$amounts.amount",
-            startDate: "$amounts.startDate",
-            endDate: "$amounts.endDate",
+            startDate: {
+              $dateToString: { date: "$amounts.startDate", format: "%Y-%m" },
+            },
+            endDate: {
+              $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
+            },
             canEditAmount: {
               $gt: ["$startDate", req.lastMonthId],
             },

@@ -1,179 +1,9 @@
 const Month = require("../../models/month");
 const Expense = require("../../models/expense");
 const { ObjectId } = require("mongoose").Types;
+const moment = require("moment");
 
 module.exports = function (router) {
-  router
-    .route("/months")
-    .get((req, res) => {
-      Month.aggregate(
-        [
-          {
-            $sort: {
-              _id: -1,
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              id: {
-                $dateToString: {
-                  date: "$_id",
-                  format: "%Y-%m",
-                },
-              },
-              name: {
-                $concat: [
-                  {
-                    $let: {
-                      vars: {
-                        month: {
-                          $dateToString: {
-                            date: "$_id",
-                            format: "%m",
-                          },
-                        },
-                      },
-                      in: {
-                        $switch: {
-                          branches: [
-                            {
-                              case: {
-                                $eq: ["$$month", "01"],
-                              },
-                              then: "Janvier",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "02"],
-                              },
-                              then: "Février",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "03"],
-                              },
-                              then: "Mars",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "04"],
-                              },
-                              then: "Avril",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "05"],
-                              },
-                              then: "Mai",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "06"],
-                              },
-                              then: "Juin",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "07"],
-                              },
-                              then: "Juillet",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "08"],
-                              },
-                              then: "Août",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "09"],
-                              },
-                              then: "Septembre",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "10"],
-                              },
-                              then: "Octobre",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "11"],
-                              },
-                              then: "Novembre",
-                            },
-                            {
-                              case: {
-                                $eq: ["$$month", "12"],
-                              },
-                              then: "Décembre",
-                            },
-                          ],
-                          default: "$$month",
-                        },
-                      },
-                    },
-                  },
-                  " ",
-                  {
-                    $dateToString: {
-                      date: "$_id",
-                      format: "%Y",
-                    },
-                  },
-                ],
-              },
-            },
-          },
-          {
-            $addFields: {
-              canEdit: false,
-            },
-          },
-        ],
-        (err, months) => {
-          if (err) {
-            return res.send(err);
-          }
-          return res.json(months);
-        }
-      );
-    })
-    .post((req, res) => {
-      if (!req.body.id) {
-        res.status = 400;
-        res.send("id is required");
-      }
-      const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
-      const formatIsValid = req.body.id.match(regexFormat);
-      if (!formatIsValid) {
-        res.status = 400;
-        res.send("id format should be YYYY-MM");
-      }
-
-      const id = new Date(`${req.body.id}-01`);
-      Month.findById(id, (err, month) => {
-        if (err) {
-          res.status = 500;
-          return res.send(err);
-        } else if (month) {
-          res.status = 400;
-          res.send("id already exists");
-        } else {
-          const month = new Month({ _id: id });
-          month.save(function (err) {
-            if (err) {
-              res.status = 500;
-              return res.send(err);
-            }
-            res.status = 201;
-            return res.json(month);
-          });
-        }
-      });
-    });
-
   router.route("/months/:id").get((req, res) => {
     const monthId = `${req.params.id}-01`;
     Expense.aggregate(
@@ -231,7 +61,7 @@ module.exports = function (router) {
             $and: [
               {
                 startDate: {
-                  $lte: new Date(monthId),
+                  $lte: moment.utc(monthId).toDate(),
                 },
               },
               {
@@ -241,7 +71,7 @@ module.exports = function (router) {
                   },
                   {
                     endDate: {
-                      $gte: new Date(monthId),
+                      $gte: moment.utc(monthId).toDate(),
                     },
                   },
                 ],
@@ -265,6 +95,7 @@ module.exports = function (router) {
                   amount: "$salaries.amount",
                   startDate: "$salaries.startDate",
                   endDate: "$salaries.endDate",
+                  rank: 1,
                 },
               },
               {
@@ -272,7 +103,7 @@ module.exports = function (router) {
                   $and: [
                     {
                       startDate: {
-                        $lte: new Date(monthId),
+                        $lte: moment.utc(monthId).toDate(),
                       },
                     },
                     {
@@ -282,7 +113,7 @@ module.exports = function (router) {
                         },
                         {
                           endDate: {
-                            $gte: new Date(monthId),
+                            $gte: moment.utc(monthId).toDate(),
                           },
                         },
                       ],
@@ -298,6 +129,7 @@ module.exports = function (router) {
                         _id: 1,
                         name: 1,
                         amount: 1,
+                        rank: 1,
                       },
                     },
                   ],
@@ -327,6 +159,7 @@ module.exports = function (router) {
                 $project: {
                   _id: "$collection._id",
                   name: "$collection.name",
+                  rank: "$collection.rank",
                   percentage: {
                     $round: [
                       {
@@ -335,6 +168,11 @@ module.exports = function (router) {
                       2,
                     ],
                   },
+                },
+              },
+              {
+                $sort: {
+                  rank: 1,
                 },
               },
             ],
@@ -360,6 +198,7 @@ module.exports = function (router) {
               _id: 1,
               name: 1,
               percentage: 1,
+              rank: 1,
               amount: {
                 $switch: {
                   branches: [
@@ -665,6 +504,11 @@ module.exports = function (router) {
             ],
             expenses: [
               {
+                $sort: {
+                  "amountDistribution.rank": 1,
+                },
+              },
+              {
                 $group: {
                   _id: {
                     id: "$_id",
@@ -712,7 +556,7 @@ module.exports = function (router) {
               name: "$contributors._id.name",
               percentage: "$contributors._id.percentage",
               amount: {
-                $round: ["$contributors.totalAmount", 2],
+                $round: ["$contributors.totalAmount", 0],
               },
             },
             expenses: 1,
@@ -745,7 +589,7 @@ module.exports = function (router) {
                   _id: 0,
                   id: {
                     $dateToString: {
-                      date: new Date(monthId),
+                      date: moment.utc(monthId).toDate(),
                       format: "%Y-%m",
                     },
                   },
@@ -754,13 +598,13 @@ module.exports = function (router) {
                       vars: {
                         month: {
                           $dateToString: {
-                            date: new Date(monthId),
+                            date: moment.utc(monthId).toDate(),
                             format: "%m",
                           },
                         },
                         year: {
                           $dateToString: {
-                            date: new Date(monthId),
+                            date: moment.utc(monthId).toDate(),
                             format: "%Y",
                           },
                         },
@@ -860,7 +704,10 @@ module.exports = function (router) {
                             input: "$months",
                             as: "month",
                             in: {
-                              $eq: ["$$month._id", new Date(monthId)],
+                              $eq: [
+                                "$$month._id",
+                                moment.utc(monthId).toDate(),
+                              ],
                             },
                           },
                         },
@@ -894,8 +741,181 @@ module.exports = function (router) {
           res.status = 500;
           return res.send(err);
         }
-        return res.json(month);
+        return res.json(month[0]);
       }
     );
   });
+
+  router
+    .route("/months")
+    .get((req, res) => {
+      Month.aggregate(
+        [
+          {
+            $sort: {
+              _id: -1,
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              id: {
+                $dateToString: {
+                  date: "$_id",
+                  format: "%Y-%m",
+                },
+              },
+              name: {
+                $concat: [
+                  {
+                    $let: {
+                      vars: {
+                        month: {
+                          $dateToString: {
+                            date: "$_id",
+                            format: "%m",
+                          },
+                        },
+                      },
+                      in: {
+                        $switch: {
+                          branches: [
+                            {
+                              case: {
+                                $eq: ["$$month", "01"],
+                              },
+                              then: "Janvier",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "02"],
+                              },
+                              then: "Février",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "03"],
+                              },
+                              then: "Mars",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "04"],
+                              },
+                              then: "Avril",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "05"],
+                              },
+                              then: "Mai",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "06"],
+                              },
+                              then: "Juin",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "07"],
+                              },
+                              then: "Juillet",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "08"],
+                              },
+                              then: "Août",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "09"],
+                              },
+                              then: "Septembre",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "10"],
+                              },
+                              then: "Octobre",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "11"],
+                              },
+                              then: "Novembre",
+                            },
+                            {
+                              case: {
+                                $eq: ["$$month", "12"],
+                              },
+                              then: "Décembre",
+                            },
+                          ],
+                          default: "$$month",
+                        },
+                      },
+                    },
+                  },
+                  " ",
+                  {
+                    $dateToString: {
+                      date: "$_id",
+                      format: "%Y",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          {
+            $addFields: {
+              canEdit: false,
+              contributors: [],
+              expenses: [],
+            },
+          },
+        ],
+        (err, months) => {
+          if (err) {
+            return res.send(err);
+          }
+          return res.json(months);
+        }
+      );
+    })
+    .post((req, res) => {
+      if (!req.body.id) {
+        res.status(400);
+        res.send("id is required");
+      }
+      const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
+      const formatIsValid = req.body.id.match(regexFormat);
+      if (!formatIsValid) {
+        res.status(400);
+        res.send("id format should be YYYY-MM");
+      }
+
+      const id = moment.utc(`${req.body.id}-01`).toDate();
+      Month.findById(id, (err, month) => {
+        if (err) {
+          res.status(500);
+          return res.send(err);
+        } else if (month) {
+          res.status(400);
+          res.send("id already exists");
+        } else {
+          const month = new Month({ _id: id });
+          month.save(function (err) {
+            if (err) {
+              res.status(500);
+              return res.send(err);
+            }
+            //res.status(201);
+            return res.status(201).json(month);
+          });
+        }
+      });
+    });
 };

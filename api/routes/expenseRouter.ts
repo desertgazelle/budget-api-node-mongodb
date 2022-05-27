@@ -1,13 +1,16 @@
-const Expense = require("../../models/expense");
-const Month = require("../../models/month");
-const Category = require("../../models/category");
-const DistributionType = require("../../models/distributionType");
-const { isValid } = require("../services/validAmountService")();
-const { ObjectId } = require("mongoose").Types;
-const moment = require("moment");
+import Expense, { IAmount, IExpense } from "../../models/expense";
+import Month, { IMonth } from "../../models/month";
+import Category, { ICategory } from "../../models/category";
+import DistributionType, {
+  IDistributionType,
+} from "../../models/distributionType";
+import validAmountService from "../services/validAmountService";
+import mongoose from "mongoose";
+import { Router, Request, Response, NextFunction } from "express";
+import moment from "moment";
 
-module.exports = function (router) {
-  router.use("/expenses", (req, res, next) => {
+export default function (router: Router) {
+  router.use("/expenses", (req: Request, res: Response, next: NextFunction) => {
     Month.aggregate(
       [
         {
@@ -19,12 +22,12 @@ module.exports = function (router) {
           $limit: 1,
         },
       ],
-      (err, month) => {
+      (err: Error, months: IMonth[]) => {
         if (err) {
           return res.send(err);
-        } else if (month) {
-          req.lastMonthId = month[0]._id;
-          console.log(req.lastMonthId);
+        } else if (months) {
+          res.locals.lastMonthId = months[0]._id;
+          console.log(res.locals.lastMonthId);
           return next();
         }
         const defaultMonth = moment.utc().date(1).toDate();
@@ -33,7 +36,7 @@ module.exports = function (router) {
     );
   });
 
-  router.use("/expenses", (req, res, next) => {
+  router.use("/expenses", (req: Request, res: Response, next: NextFunction) => {
     if (
       req.url.match(new RegExp("^.*\\/amounts.*$")) ||
       (req.body &&
@@ -48,34 +51,40 @@ module.exports = function (router) {
       return res.send("Le nom est requis");
     }
 
-    Expense.find({ name: req.body.name }, (err, expenses) => {
-      if (err) {
-        return res.send(err);
-      }
-      if (
-        expenses.length == 0 ||
-        (req.params.id &&
+    Expense.find(
+      { name: req.body.name },
+      (err: Error, expenses: IExpense[]) => {
+        if (err) {
+          return res.send(err);
+        }
+        if (
+          expenses.length == 0 ||
+          req.params.id /*&&
           req.sameNameExpenses.length == 1 &&
-          req.sameNameExpenses.some((c) => c._id == req.params.id))
-      ) {
-        return next();
+          req.sameNameExpenses.some((c) => c._id == req.params.id)*/
+        ) {
+          return next();
+        }
       }
-    });
+    );
 
     if (!req.body.categoryId) {
       res.status(400);
       return res.send("La catégorie est requise");
     }
 
-    Category.findById(ObjectId(req.body.categoryId), (err, category) => {
-      if (err) {
-        return res.send(err);
+    Category.findById(
+      new mongoose.Types.ObjectId(req.body.categoryId),
+      (err: Error, categories: ICategory[]) => {
+        if (err) {
+          return res.send(err);
+        }
+        if (categories.length == 0) {
+          res.status(400);
+          return res.send("La catégorie est introuvable");
+        }
       }
-      if (category.length == 0) {
-        res.status(400);
-        return res.send("La catégorie est introuvable");
-      }
-    });
+    );
 
     if (!req.body.distributionTypeId) {
       res.status(400);
@@ -83,12 +92,12 @@ module.exports = function (router) {
     }
 
     DistributionType.findById(
-      ObjectId(req.body.distributionTypeId),
-      (err, distributionType) => {
+      new mongoose.Types.ObjectId(req.body.distributionTypeId),
+      (err: Error, distributionTypes: IDistributionType[]) => {
         if (err) {
           return res.send(err);
         }
-        if (distributionType.length == 0) {
+        if (distributionTypes.length == 0) {
           res.status(400);
           return res.send("La méthode de distribution est introuvable");
         }
@@ -98,7 +107,7 @@ module.exports = function (router) {
 
   router
     .route("/expenses")
-    .get((req, res) => {
+    .get((req: Request, res: Response) => {
       Expense.aggregate(
         [
           {
@@ -157,10 +166,10 @@ module.exports = function (router) {
                 $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
               },
               canEditAmount: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditStartDate: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditEndDate: {
                 $or: [
@@ -168,7 +177,7 @@ module.exports = function (router) {
                     endDate: null,
                   },
                   {
-                    $gt: ["$endDate", req.lastMonthId],
+                    $gt: ["$endDate", res.locals.lastMonthId],
                   },
                 ],
               },
@@ -210,7 +219,7 @@ module.exports = function (router) {
             },
           },
         ],
-        (err, expenses) => {
+        (err: Error, expenses: IExpense[]) => {
           if (err) {
             return res.send(err);
           }
@@ -218,82 +227,90 @@ module.exports = function (router) {
         }
       );
     })
-    .post((req, res) => {
-      req.body._id = new ObjectId();
+    .post((req: Request, res: Response) => {
+      req.body._id = new mongoose.Types.ObjectId();
       const expense = new Expense(req.body);
       expense.save();
       res.status(201);
-      req.params.expenseId = expense._id;
+      req.params.expenseId = expense._id.toString();
       return GetExpense(req, res);
     });
 
-  router.use("/expenses/:expenseId/amounts", (req, res, next) => {
-    if (
-      req.body &&
-      Object.keys(req.body).length === 0 &&
-      Object.getPrototypeOf(req.body) === Object.prototype
-    ) {
-      return next();
-    }
-    if (!req.body.amount) {
-      res.status(400);
-      return res.send("Le montant est requis");
-    }
-    if (!req.body.startDate) {
-      res.status(400);
-      return res.send("La date de début de validité est requis");
-    }
-    const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
-
-    if (!req.body.startDate.match(regexFormat)) {
-      res.status(400);
-      return res.send("Le format de date est YYYY-MM");
-    } else {
-      req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
-    }
-
-    if (req.body.endDate && !req.body.endDate.match(regexFormat)) {
-      res.status(400);
-      return res.send("Le format de date est YYYY-MM");
-    } else if (req.body.endDate) {
-      req.body.endDate = moment.utc(`${req.body.endDate}-01`).toDate();
-    }
-
-    Expense.findById(ObjectId(req.params.expenseId), (err, expense) => {
-      if (err) {
-        return res.send(err);
-      } else if (!expense) {
-        res.status(404);
-        return res.send("Dépense introuvable");
+  router.use(
+    "/expenses/:expenseId/amounts",
+    (req: Request, res: Response, next) => {
+      if (
+        req.body &&
+        Object.keys(req.body).length === 0 &&
+        Object.getPrototypeOf(req.body) === Object.prototype
+      ) {
+        return next();
       }
-
-      req.expense = expense;
-      let update = false;
-      if (req.method == "PUT") {
-        update = true;
-        req.body.id = new ObjectId(req.url.substr(1, req.url.length - 1));
-      }
-      const validationErrors = isValid(
-        req.body,
-        expense.amounts,
-        req.lastMonthId,
-        update
-      );
-      if (validationErrors) {
+      if (!req.body.amount) {
         res.status(400);
-        return res.send(validationErrors);
+        return res.send("Le montant est requis");
+      }
+      if (!req.body.startDate) {
+        res.status(400);
+        return res.send("La date de début de validité est requis");
+      }
+      const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
+
+      if (!req.body.startDate.match(regexFormat)) {
+        res.status(400);
+        return res.send("Le format de date est YYYY-MM");
+      } else {
+        req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
       }
 
-      return next();
-    });
-  });
+      if (req.body.endDate && !req.body.endDate.match(regexFormat)) {
+        res.status(400);
+        return res.send("Le format de date est YYYY-MM");
+      } else if (req.body.endDate) {
+        req.body.endDate = moment.utc(`${req.body.endDate}-01`).toDate();
+      }
 
-  function GetAmounts(req, res) {
+      Expense.findById(
+        new mongoose.Types.ObjectId(req.params.expenseId),
+        (err: Error, expense: IExpense) => {
+          if (err) {
+            return res.send(err);
+          } else if (!expense) {
+            res.status(404);
+            return res.send("Dépense introuvable");
+          }
+
+          res.locals.expense = expense;
+          let update = false;
+          if (req.method == "PUT") {
+            update = true;
+            req.body.id = new mongoose.Types.ObjectId(
+              req.url.substr(1, req.url.length - 1)
+            );
+          }
+          const validationErrors = validAmountService().isValid(
+            req.body,
+            expense.amounts,
+            res.locals.lastMonthId,
+            update
+          );
+          if (validationErrors) {
+            res.status(400);
+            return res.send(validationErrors);
+          }
+
+          return next();
+        }
+      );
+    }
+  );
+
+  function GetAmounts(req: Request, res: Response) {
     Expense.aggregate(
       [
         {
           $match: {
-            _id: new ObjectId(req.params.expenseId),
+            _id: new mongoose.Types.ObjectId(req.params.expenseId),
           },
         },
         {
@@ -319,10 +336,10 @@ module.exports = function (router) {
               $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
             },
             canEditAmount: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditStartDate: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditEndDate: {
               $or: [
@@ -330,7 +347,7 @@ module.exports = function (router) {
                   $eq: ["$endDate", null],
                 },
                 {
-                  $gt: ["$endDate", req.lastMonthId],
+                  $gt: ["$endDate", res.locals.lastMonthId],
                 },
               ],
             },
@@ -355,15 +372,15 @@ module.exports = function (router) {
         {
           $project: {
             _id: 0,
-            amountHistory: 1,
+            amounts: "$amountHistory",
           },
         },
       ],
-      (err, expense) => {
+      (err: Error, expenses: IExpense[]) => {
         if (err) {
           return res.send(err);
         }
-        return res.json(expense[0].amountHistory);
+        return res.json(expenses[0].amounts);
       }
     );
   }
@@ -375,7 +392,7 @@ module.exports = function (router) {
         [
           {
             $match: {
-              _id: new ObjectId(req.params.expenseId),
+              _id: new mongoose.Types.ObjectId(req.params.expenseId),
             },
           },
           {
@@ -390,7 +407,7 @@ module.exports = function (router) {
           },
           {
             $match: {
-              "amounts._id": new ObjectId(req.params.amountId),
+              "amounts._id": new mongoose.Types.ObjectId(req.params.amountId),
             },
           },
           {
@@ -407,10 +424,10 @@ module.exports = function (router) {
                 $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
               },
               canEditAmount: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditStartDate: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditEndDate: {
                 $or: [
@@ -418,28 +435,28 @@ module.exports = function (router) {
                     $eq: ["$endDate", null],
                   },
                   {
-                    $gt: ["$endDate", req.lastMonthId],
+                    $gt: ["$endDate", res.locals.lastMonthId],
                   },
                 ],
               },
             },
           },
         ],
-        (err, expense) => {
+        (err: Error, expenses: IExpense[]) => {
           if (err) {
             return res.send(err);
           }
-          return res.json(expense[0]);
+          return res.json(expenses[0]);
         }
       );
     })
     .put((req, res) => {
       req.body._id = req.params.amountId;
-      const previousAmountToUpdate = req.expense.amounts.find(
-        (s) =>
+      const previousAmountToUpdate = res.locals.expense.amounts.find(
+        (s: IAmount) =>
           s.endDate == null &&
           s.startDate < req.body.startDate &&
-          s._id != req.params.amountId
+          s._id != new mongoose.Types.ObjectId(req.params.amountId)
       );
       if (previousAmountToUpdate) {
         previousAmountToUpdate.endDate = req.body.startDate;
@@ -448,8 +465,9 @@ module.exports = function (router) {
         );
       }
 
-      const amountToUpdate = req.expense.amounts.find(
-        (s) => s._id == req.params.amountId
+      const amountToUpdate = res.locals.expense.amounts.find(
+        (s: IAmount) =>
+          s._id == new mongoose.Types.ObjectId(req.params.amountId)
       );
       if (amountToUpdate) {
         amountToUpdate.amount = req.body.amount;
@@ -457,7 +475,7 @@ module.exports = function (router) {
         amountToUpdate.endDate = req.body.endDate;
       }
 
-      req.expense.save();
+      res.locals.expense.save();
 
       return GetAmounts(req, res);
     });
@@ -465,27 +483,29 @@ module.exports = function (router) {
   router
     .route("/expenses/:expenseId/amounts")
     .get(GetAmounts)
-    .post((req, res) => {
-      req.body._id = new ObjectId();
-      const amountToUpdate = req.expense.amounts.find((s) => s.endDate == null);
+    .post((req: Request, res: Response) => {
+      req.body._id = new mongoose.Types.ObjectId();
+      const amountToUpdate = res.locals.expense.amounts.find(
+        (s: IAmount) => s.endDate == null
+      );
       if (amountToUpdate) {
         amountToUpdate.endDate = req.body.startDate;
         amountToUpdate.endDate = amountToUpdate.endDate.setMonth(
           amountToUpdate.endDate.getMonth() - 1
         );
       }
-      req.expense.amounts.push(req.body);
-      req.expense.save();
+      res.locals.expense.amounts.push(req.body);
+      res.locals.expense.save();
 
       return GetAmounts(req, res);
     });
 
-  function GetExpense(req, res) {
+  function GetExpense(req: Request, res: Response) {
     Expense.aggregate(
       [
         {
           $match: {
-            _id: new ObjectId(req.params.expenseId),
+            _id: new mongoose.Types.ObjectId(req.params.expenseId),
           },
         },
         {
@@ -546,10 +566,10 @@ module.exports = function (router) {
               $dateToString: { date: "$amounts.endDate", format: "%Y-%m" },
             },
             canEditAmount: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditStartDate: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditEndDate: {
               $or: [
@@ -557,7 +577,7 @@ module.exports = function (router) {
                   $eq: ["$endDate", null],
                 },
                 {
-                  $gt: ["$endDate", req.lastMonthId],
+                  $gt: ["$endDate", res.locals.lastMonthId],
                 },
               ],
             },
@@ -599,11 +619,11 @@ module.exports = function (router) {
           },
         },
       ],
-      (err, expense) => {
+      (err: Error, expenses: IExpense[]) => {
         if (err) {
           return res.send(err);
         }
-        return res.json(expense[0]);
+        return res.json(expenses[0]);
       }
     );
   }
@@ -613,7 +633,7 @@ module.exports = function (router) {
     .get(GetExpense)
     .put((req, res) => {
       Expense.findByIdAndUpdate(
-        ObjectId(req.params.expenseId),
+        new mongoose.Types.ObjectId(req.params.expenseId),
         { name: req.body.name },
         { new: true },
         (err) => {
@@ -624,4 +644,4 @@ module.exports = function (router) {
         }
       );
     });
-};
+}

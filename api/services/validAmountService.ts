@@ -1,7 +1,15 @@
-module.exports = function () {
-  function isValid(validAmount, history, lastMonth, update = false) {
+import { ISalary } from "../../models/contributor";
+import { IAmount } from "../../models/expense";
+
+export default function () {
+  function isValid<T extends IAmount | ISalary>(
+    validAmount: T,
+    history: T[],
+    lastMonth: Date,
+    update: boolean = false
+  ) {
     if (validAmount) {
-      let originalValidAmount = null;
+      let originalValidAmount: T | undefined = undefined;
 
       if (history.length > 0) {
         originalValidAmount = history.find((s) => s.id == validAmount.id);
@@ -37,31 +45,31 @@ module.exports = function () {
       }
 
       const canEditStartDate =
-        !update || originalValidAmount.startDate > lastMonth;
+        !update || originalValidAmount!.startDate > lastMonth;
 
       if (
         !canEditStartDate &&
-        originalValidAmount.amount != validAmount.amount
+        originalValidAmount!.amount != validAmount.amount
       ) {
         return "La valeur du montant ne peut être modifiée sans affecter l'historique du budget !";
       }
 
       const canEditEndDate =
         !update ||
-        !originalValidAmount.endDate ||
-        originalValidAmount.endDate > lastMonth;
+        !originalValidAmount!.endDate ||
+        originalValidAmount!.endDate > lastMonth;
 
-      let isBudgetHistoryAffected =
+      let isBudgetHistoryAffected: boolean | undefined =
         !update && validAmount.startDate <= lastMonth;
 
       isBudgetHistoryAffected =
         isBudgetHistoryAffected ||
         (!canEditStartDate &&
-          originalValidAmount.startDate.getDate() !=
+          originalValidAmount!.startDate.getDate() !=
             validAmount.startDate.getDate()) ||
         (!canEditEndDate &&
-          originalValidAmount.endDate.getDate() !=
-            validAmount.endDate.getDate());
+          originalValidAmount!.endDate?.getDate() !=
+            validAmount.endDate?.getDate());
       isBudgetHistoryAffected =
         isBudgetHistoryAffected ||
         (canEditStartDate && validAmount.startDate <= lastMonth) ||
@@ -77,4 +85,4 @@ module.exports = function () {
   }
 
   return { isValid };
-};
+}

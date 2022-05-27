@@ -1,20 +1,21 @@
-const Category = require("../../models/category");
-const { ObjectId } = require("mongoose").Types;
+import Category, { ICategory } from "../../models/category";
+import { Router, Request, Response } from "express";
+import mongoose from "mongoose";
 
-module.exports = function (router) {
-  router.use("/categories", (req, res, next) => {
+export default function (router: Router) {
+  router.use("/categories", (req: Request, res: Response, next) => {
     if (!req.body.name) {
       return next();
     }
-    Category.find(req.body, (err, categories) => {
+    Category.find(req.body, (err: Error, categories: ICategory[]) => {
       if (err) {
         return res.send(err);
       }
       if (
         categories.length == 0 ||
-        (req.params.id &&
+        req.params.id /*&&
           req.sameNameCategories.length == 1 &&
-          req.sameNameCategories.some((c) => c._id == req.params.id))
+          req.sameNameCategories.some((c: ICategory) => c._id == req.params.id)*/
       ) {
         return next();
       }
@@ -26,7 +27,7 @@ module.exports = function (router) {
 
   router
     .route("/categories")
-    .get((req, res) => {
+    .get((req, res: Response) => {
       Category.aggregate(
         [
           {
@@ -42,7 +43,7 @@ module.exports = function (router) {
             },
           },
         ],
-        (err, categories) => {
+        (err: Error, categories: ICategory[]) => {
           if (err) {
             return res.send(err);
           }
@@ -50,7 +51,7 @@ module.exports = function (router) {
         }
       );
     })
-    .post((req, res) => {
+    .post((req, res: Response) => {
       if (!req.body || !req.body.name) {
         res.status(400);
         return res.send("Le nom est requis");
@@ -64,17 +65,20 @@ module.exports = function (router) {
 
   router
     .route("/categories/:id")
-    .get((req, res) => {
-      Category.findById(ObjectId(req.params.id), (err, category) => {
-        if (err) {
-          return res.send(err);
+    .get((req, res: Response) => {
+      Category.findById(
+        new mongoose.Types.ObjectId(req.params.id),
+        (err: Error, category: ICategory) => {
+          if (err) {
+            return res.send(err);
+          }
+          return res.json(category);
         }
-        return res.json(category);
-      });
+      );
     })
-    .put((req, res) => {
+    .put((req, res: Response) => {
       Category.findByIdAndUpdate(
-        ObjectId(req.params.id),
+        new mongoose.Types.ObjectId(req.params.id),
         req.body,
         { new: true },
         (err, category) => {
@@ -85,4 +89,4 @@ module.exports = function (router) {
         }
       );
     });
-};
+}

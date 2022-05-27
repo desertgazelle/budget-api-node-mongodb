@@ -1,11 +1,12 @@
-const Contributor = require("../../models/contributor");
-const Month = require("../../models/month");
-const { isValid } = require("../services/validAmountService")();
-const { ObjectId } = require("mongoose").Types;
-const moment = require("moment");
+import Contributor, { IContributor, ISalary } from "../../models/contributor";
+import Month, { IMonth } from "../../models/month";
+import validAmountService from "../services/validAmountService";
+import mongoose from "mongoose";
+import { Router, Request, Response, NextFunction } from "express";
+import moment from "moment";
 
-module.exports = function (router) {
-  router.use("/contributors", (req, res, next) => {
+export default function (router: Router) {
+  router.use("/contributors", (req: Request, res: Response, next) => {
     Month.aggregate(
       [
         {
@@ -17,11 +18,11 @@ module.exports = function (router) {
           $limit: 1,
         },
       ],
-      (err, month) => {
+      (err: Error, month: IMonth[]) => {
         if (err) {
           return res.send(err);
         } else if (month) {
-          req.lastMonthId = month[0]._id;
+          res.locals.lastMonthId = month[0]._id;
           return next();
         }
         const defaultMonth = moment.utc().date(1).toDate();
@@ -30,7 +31,7 @@ module.exports = function (router) {
     );
   });
 
-  router.route("/contributors").get((req, res) => {
+  router.route("/contributors").get((req: Request, res: Response) => {
     Contributor.aggregate(
       [
         {
@@ -56,10 +57,10 @@ module.exports = function (router) {
               $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
             },
             canEditAmount: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditStartDate: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditEndDate: {
               $or: [
@@ -67,7 +68,7 @@ module.exports = function (router) {
                   endDate: null,
                 },
                 {
-                  $gt: ["$endDate", req.lastMonthId],
+                  $gt: ["$endDate", res.locals.lastMonthId],
                 },
               ],
             },
@@ -101,7 +102,7 @@ module.exports = function (router) {
           },
         },
       ],
-      (err, contributors) => {
+      (err: Error, contributors: IContributor[]) => {
         if (err) {
           return res.send(err);
         }
@@ -110,76 +111,81 @@ module.exports = function (router) {
     );
   });
 
-  router.use("/contributors/:contributorId/salaries", (req, res, next) => {
-    if (
-      req.body &&
-      Object.keys(req.body).length === 0 &&
-      Object.getPrototypeOf(req.body) === Object.prototype
-    ) {
-      return next();
-    }
-    if (!req.body.amount) {
-      res.status(400);
-      return res.send("Le montant est requis");
-    }
-    if (!req.body.startDate) {
-      res.status(400);
-      return res.send("La date de début de validité est requis");
-    }
-    const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
-
-    if (!req.body.startDate.match(regexFormat)) {
-      res.status(400);
-      return res.send("Le format de date est YYYY-MM");
-    } else {
-      req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
-    }
-
-    if (req.body.endDate && !req.body.startDate.match(regexFormat)) {
-      res.status(400);
-      return res.send("Le format de date est YYYY-MM");
-    } else if (req.body.endDate) {
-      req.body.startDate = moment.utc(`${req.body.endDate}-01`).toDate();
-    }
-
-    Contributor.findById(
-      ObjectId(req.params.contributorId),
-      (err, contributor) => {
-        if (err) {
-          return res.send(err);
-        } else if (!contributor) {
-          res.status(404);
-          return res.send("Contributeur introuvable");
-        }
-
-        req.contributor = contributor;
-        let update = false;
-        if (req.method == "PUT") {
-          update = true;
-          req.body.id = new ObjectId(req.url.substr(1, req.url.length - 1));
-        }
-        const validationErrors = isValid(
-          req.body,
-          contributor.salaries,
-          req.lastMonthId,
-          update
-        );
-        if (validationErrors) {
-          res.status(400);
-          return res.send(validationErrors);
-        }
-
+  router.use(
+    "/contributors/:contributorId/salaries",
+    (req: Request, res: Response, next: NextFunction) => {
+      if (
+        req.body &&
+        Object.keys(req.body).length === 0 &&
+        Object.getPrototypeOf(req.body) === Object.prototype
+      ) {
         return next();
       }
-    );
-  });
+      if (!req.body.amount) {
+        res.status(400);
+        return res.send("Le montant est requis");
+      }
+      if (!req.body.startDate) {
+        res.status(400);
+        return res.send("La date de début de validité est requis");
+      }
+      const regexFormat = new RegExp("^\\d{4}-\\d{2}$");
 
-  function GetSalaries(req, res) {
+      if (!req.body.startDate.match(regexFormat)) {
+        res.status(400);
+        return res.send("Le format de date est YYYY-MM");
+      } else {
+        req.body.startDate = moment.utc(`${req.body.startDate}-01`).toDate();
+      }
+
+      if (req.body.endDate && !req.body.startDate.match(regexFormat)) {
+        res.status(400);
+        return res.send("Le format de date est YYYY-MM");
+      } else if (req.body.endDate) {
+        req.body.startDate = moment.utc(`${req.body.endDate}-01`).toDate();
+      }
+
+      Contributor.findById(
+        new mongoose.Types.ObjectId(req.params.contributorId),
+        (err: Error, contributor: IContributor) => {
+          if (err) {
+            return res.send(err);
+          } else if (!contributor) {
+            res.status(404);
+            return res.send("Contributeur introuvable");
+          }
+
+          res.locals.contributor = contributor;
+          let update = false;
+          if (req.method == "PUT") {
+            update = true;
+            req.body.id = new mongoose.Types.ObjectId(
+              req.url.substr(1, req.url.length - 1)
+            );
+          }
+          const validationErrors = validAmountService().isValid(
+            req.body,
+            contributor.salaries,
+            res.locals.lastMonthId,
+            update
+          );
+          if (validationErrors) {
+            res.status(400);
+            return res.send(validationErrors);
+          }
+
+          return next();
+        }
+      );
+    }
+  );
+
+  function GetSalaries(req: Request, res: Response) {
     Contributor.aggregate(
       [
         {
           $match: {
-            _id: new ObjectId(req.params.contributorId),
+            _id: new mongoose.Types.ObjectId(req.params.contributorId),
           },
         },
         {
@@ -200,10 +206,10 @@ module.exports = function (router) {
               $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
             },
             canEditAmount: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditStartDate: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditEndDate: {
               $or: [
@@ -211,7 +217,7 @@ module.exports = function (router) {
                   endDate: null,
                 },
                 {
-                  $gt: ["$endDate", req.lastMonthId],
+                  $gt: ["$endDate", res.locals.lastMonthId],
                 },
               ],
             },
@@ -236,15 +242,15 @@ module.exports = function (router) {
         {
           $project: {
             _id: 0,
-            salaryHistory: 1,
+            salaries: "$salaryHistory",
           },
         },
       ],
-      (err, salaries) => {
+      (err: Error, contributors: IContributor[]) => {
         if (err) {
           return res.send(err);
         }
-        return res.json(salaries[0].salaryHistory);
+        return res.json(contributors[0].salaries);
       }
     );
   }
@@ -252,10 +258,10 @@ module.exports = function (router) {
   router
     .route("/contributors/:contributorId/salaries")
     .get(GetSalaries)
-    .post((req, res) => {
-      req.body._id = new ObjectId();
-      const salaryToUpdate = req.contributor.salaries.find(
-        (s) => s.endDate == null
+    .post((req: Request, res) => {
+      req.body._id = new mongoose.Types.ObjectId();
+      const salaryToUpdate = res.locals.contributor.salaries.find(
+        (s: ISalary) => s.endDate == null
       );
       if (salaryToUpdate) {
         salaryToUpdate.endDate = req.body.startDate;
@@ -263,20 +269,20 @@ module.exports = function (router) {
           salaryToUpdate.endDate.getMonth() - 1
         );
       }
-      req.contributor.salaries.push(req.body);
-      req.contributor.save();
+      res.locals.contributor.salaries.push(req.body);
+      res.locals.contributor.save();
 
       return GetSalaries(req, res);
     });
 
   router
     .route("/contributors/:contributorId/salaries/:salaryId")
-    .get((req, res) => {
+    .get((req: Request, res) => {
       Contributor.aggregate(
         [
           {
             $match: {
-              _id: new ObjectId(req.params.contributorId),
+              _id: new mongoose.Types.ObjectId(req.params.contributorId),
             },
           },
           {
@@ -286,7 +292,7 @@ module.exports = function (router) {
           },
           {
             $match: {
-              "salaries._id": new ObjectId(req.params.salaryId),
+              "salaries._id": new mongoose.Types.ObjectId(req.params.salaryId),
             },
           },
           {
@@ -302,10 +308,10 @@ module.exports = function (router) {
                 $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
               },
               canEditAmount: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditStartDate: {
-                $gt: ["$startDate", req.lastMonthId],
+                $gt: ["$startDate", res.locals.lastMonthId],
               },
               canEditEndDate: {
                 $or: [
@@ -313,7 +319,7 @@ module.exports = function (router) {
                     endDate: null,
                   },
                   {
-                    $gt: ["$endDate", req.lastMonthId],
+                    $gt: ["$endDate", res.locals.lastMonthId],
                   },
                 ],
               },
@@ -332,21 +338,21 @@ module.exports = function (router) {
             },
           },
         ],
-        (err, salary) => {
+        (err: Error, salaries: ISalary[]) => {
           if (err) {
             return res.send(err);
           }
-          return res.json(salary[0]);
+          return res.json(salaries[0]);
         }
       );
     })
-    .put((req, res) => {
+    .put((req: Request, res) => {
       req.body._id = req.params.salaryId;
-      const previousSalaryToUpdate = req.contributor.salaries.find(
-        (s) =>
+      const previousSalaryToUpdate = res.locals.contributor.salaries.find(
+        (s: ISalary) =>
           s.endDate == null &&
           s.startDate < req.body.startDate &&
-          s._id != req.params.salaryId
+          s._id != new mongoose.Types.ObjectId(req.params.salaryId)
       );
       if (previousSalaryToUpdate) {
         previousSalaryToUpdate.endDate = req.body.startDate;
@@ -355,8 +361,9 @@ module.exports = function (router) {
         );
       }
 
-      const salaryToUpdate = req.contributor.salaries.find(
-        (s) => s._id == req.params.salaryId
+      const salaryToUpdate = res.locals.contributor.salaries.find(
+        (s: ISalary) =>
+          s._id == new mongoose.Types.ObjectId(req.params.salaryId)
       );
       if (salaryToUpdate) {
         salaryToUpdate.amount = req.body.amount;
@@ -364,17 +371,17 @@ module.exports = function (router) {
         salaryToUpdate.endDate = req.body.endDate;
       }
 
-      req.contributor.save();
+      res.locals.contributor.save();
 
       return GetSalaries(req, res);
     });
 
-  function GetContributor(req, res) {
+  function GetContributor(req: Request, res: Response) {
     Contributor.aggregate(
       [
         {
           $match: {
-            _id: new ObjectId(req.params.contributorId),
+            _id: new mongoose.Types.ObjectId(req.params.contributorId),
           },
         },
         {
@@ -395,10 +402,10 @@ module.exports = function (router) {
               $dateToString: { date: "$salaries.endDate", format: "%Y-%m" },
             },
             canEditAmount: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditStartDate: {
-              $gt: ["$startDate", req.lastMonthId],
+              $gt: ["$startDate", res.locals.lastMonthId],
             },
             canEditEndDate: {
               $or: [
@@ -406,7 +413,7 @@ module.exports = function (router) {
                   endDate: null,
                 },
                 {
-                  $gt: ["$endDate", req.lastMonthId],
+                  $gt: ["$endDate", res.locals.lastMonthId],
                 },
               ],
             },
@@ -440,11 +447,11 @@ module.exports = function (router) {
           },
         },
       ],
-      (err, contributor) => {
+      (err: Error, contributors: IContributor[]) => {
         if (err) {
           return res.send(err);
         }
-        return res.json(contributor[0]);
+        return res.json(contributors[0]);
       }
     );
   }
@@ -452,9 +459,9 @@ module.exports = function (router) {
   router
     .route("/contributors/:contributorId")
     .get(GetContributor)
-    .put((req, res) => {
+    .put((req: Request, res) => {
       Contributor.findByIdAndUpdate(
-        ObjectId(req.params.contributorId),
+        new mongoose.Types.ObjectId(req.params.contributorId),
         req.body,
         { new: true },
         (err) => {
@@ -465,4 +472,4 @@ module.exports = function (router) {
         }
       );
     });
-};
+}

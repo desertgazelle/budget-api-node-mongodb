@@ -1,7 +1,13 @@
-const { ObjectId } = require("mongodb");
-const mongoose = require("mongoose");
+import { ObjectId } from "mongodb";
+import { Document, Model, model, Schema } from "mongoose";
 
-const salarySchema = mongoose.Schema({
+export interface ISalary extends Document {
+  _id: ObjectId;
+  amount: number;
+  startDate: Date;
+  endDate?: Date;
+}
+const salarySchema = new Schema({
   _id: { type: ObjectId },
   amount: { type: Number, required: true },
   startDate: { type: Date, required: true },
@@ -16,7 +22,13 @@ salarySchema.set("toJSON", {
   },
 });
 
-const contributorSchema = mongoose.Schema({
+export interface IContributor extends Document {
+  _id: ObjectId;
+  name: string;
+  salaries: ISalary[];
+}
+
+const contributorSchema = new Schema({
   _id: { type: ObjectId },
   name: { type: String, required: true },
   salaries: [salarySchema],
@@ -30,4 +42,9 @@ contributorSchema.set("toJSON", {
   },
 });
 
-module.exports = mongoose.model("contributor", contributorSchema);
+const Contributor: Model<IContributor> = model(
+  "contributor",
+  contributorSchema
+);
+
+export default Contributor;

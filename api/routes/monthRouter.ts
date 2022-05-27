@@ -1,10 +1,11 @@
-const Month = require("../../models/month");
-const Expense = require("../../models/expense");
-const { ObjectId } = require("mongoose").Types;
-const moment = require("moment");
+import Expense, { IAmount, IExpense } from "../../models/expense";
+import Month, { IMonth } from "../../models/month";
+import mongoose from "mongoose";
+import { Router, Request, Response, NextFunction } from "express";
+import moment from "moment";
 
-module.exports = function (router) {
-  router.route("/months/:id").get((req, res) => {
+export default function (router: Router) {
+  router.route("/months/:id").get((req: Request, res: Response) => {
     const monthId = `${req.params.id}-01`;
     Expense.aggregate(
       [
@@ -206,7 +207,9 @@ module.exports = function (router) {
                       case: {
                         $eq: [
                           "$distributionTypeId",
-                          new ObjectId("626a9a0eeffe492ef3dfe8a3"),
+                          new mongoose.Types.ObjectId(
+                            "626a9a0eeffe492ef3dfe8a3"
+                          ),
                         ],
                       },
                       then: {
@@ -227,7 +230,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a4"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a4"
+                              ),
                             ],
                           },
                           {
@@ -259,7 +264,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a4"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a4"
+                              ),
                             ],
                           },
                           {
@@ -285,7 +292,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a5"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a5"
+                              ),
                             ],
                           },
                           {
@@ -311,7 +320,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a5"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a5"
+                              ),
                             ],
                           },
                           {
@@ -343,7 +354,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a6"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a6"
+                              ),
                             ],
                           },
                           {
@@ -359,7 +372,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a6"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a6"
+                              ),
                             ],
                           },
                           {
@@ -382,7 +397,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a7"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a7"
+                              ),
                             ],
                           },
                           {
@@ -398,7 +415,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a7"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a7"
+                              ),
                             ],
                           },
                           {
@@ -414,7 +433,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a8"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a8"
+                              ),
                             ],
                           },
                           {
@@ -437,7 +458,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a8"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a8"
+                              ),
                             ],
                           },
                           {
@@ -453,7 +476,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a9"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a9"
+                              ),
                             ],
                           },
                           {
@@ -469,7 +494,9 @@ module.exports = function (router) {
                           {
                             $eq: [
                               "$distributionTypeId",
-                              new ObjectId("626a9a0eeffe492ef3dfe8a9"),
+                              new mongoose.Types.ObjectId(
+                                "626a9a0eeffe492ef3dfe8a9"
+                              ),
                             ],
                           },
                           {
@@ -736,19 +763,19 @@ module.exports = function (router) {
           },
         },
       ],
-      (err, month) => {
+      (err: Error, months: IMonth[]) => {
         if (err) {
-          res.status = 500;
+          res.status(500);
           return res.send(err);
         }
-        return res.json(month[0]);
+        return res.json(months[0]);
       }
     );
   });
 
   router
     .route("/months")
-    .get((req, res) => {
+    .get((req: Request, res: Response) => {
       Month.aggregate(
         [
           {
@@ -877,7 +904,7 @@ module.exports = function (router) {
             },
           },
         ],
-        (err, months) => {
+        (err: Error, months: IMonth[]) => {
           if (err) {
             return res.send(err);
           }
@@ -898,7 +925,7 @@ module.exports = function (router) {
       }
 
       const id = moment.utc(`${req.body.id}-01`).toDate();
-      Month.findById(id, (err, month) => {
+      Month.findById(id, (err: Error, month: IMonth) => {
         if (err) {
           res.status(500);
           return res.send(err);
@@ -918,4 +945,4 @@ module.exports = function (router) {
         }
       });
     });
-};
+}

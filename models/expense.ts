@@ -1,7 +1,14 @@
-const mongoose = require("mongoose");
-const { ObjectId } = require("mongodb");
+import { ObjectId } from "mongodb";
+import { Document, Model, model, Schema } from "mongoose";
 
-const amountSchema = mongoose.Schema({
+export interface IAmount extends Document {
+  _id: ObjectId;
+  amount: number;
+  startDate: Date;
+  endDate?: Date;
+}
+
+const amountSchema = new Schema({
   _id: { type: ObjectId },
   amount: { type: Number, required: true },
   startDate: { type: Date, required: true },
@@ -16,7 +23,15 @@ amountSchema.set("toJSON", {
   },
 });
 
-const expenseSchema = mongoose.Schema({
+export interface IExpense extends Document {
+  _id: ObjectId;
+  name: string;
+  categoryId: ObjectId;
+  distributionTypeId: ObjectId;
+  amounts: IAmount[];
+}
+
+const expenseSchema = new Schema({
   _id: { type: ObjectId },
   name: { type: String, required: true },
   categoryId: { type: ObjectId, ref: "categories", required: true },
@@ -36,4 +51,6 @@ expenseSchema.set("toJSON", {
   },
 });
 
-module.exports = mongoose.model("expense", expenseSchema);
+const Expense: Model<IExpense> = model("expense", expenseSchema);
+
+export default Expense;

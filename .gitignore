@@ -104,4 +104,4 @@ dist
 .tern-port
 
 #db config
-local.config.ts
+local.config.*
